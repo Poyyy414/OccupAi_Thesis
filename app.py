@@ -1,6 +1,6 @@
 """
-app.py — OccupAI Flask API v4.2
-=================================
+app.py — OccupAI Flask API v4.3 (Optimized)
+=============================================
 Run:
   python app.py
 
@@ -22,7 +22,7 @@ API Endpoints:
   POST /api/slots/auto  → auto-detect slots (admin/owner)
 """
 
-from flask import Flask, jsonify, request 
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt
 import cv2
@@ -68,14 +68,14 @@ else:
     CAM_BACKEND = cv2.CAP_ANY
 
 # ╔══════════════════════════════════════════════╗
-# ║         PERFORMANCE SETTINGS                ║
+# ║   PERFORMANCE SETTINGS (OPTIMIZED)          ║
 # ╚══════════════════════════════════════════════╝
-FEED_W        = 480
-FEED_H        = 360
-IMGSZ         = 256
-YOLO_SKIP     = 5
-JPEG_QUALITY  = 45
-SNAPSHOT_RATE = 0.1
+FEED_W        = 320   # ✅ reduced from 480
+FEED_H        = 240   # ✅ reduced from 360
+IMGSZ         = 160   # ✅ reduced from 256
+YOLO_SKIP     = 10    # ✅ increased from 5
+JPEG_QUALITY  = 30    # ✅ reduced from 45
+SNAPSHOT_RATE = 0.5   # ✅ increased from 0.1
 SLOTS_RELOAD  = 60
 
 # ╔══════════════════════════════════════════════╗
@@ -148,7 +148,7 @@ def smart_fit_slots(occupied_boxes):
     return slots
 
 
-# ── Slots: load from DB (replaces slots.json) ──
+# ── Slots: load from DB ──
 def load_slots():
     try:
         conn = get_db()
@@ -199,7 +199,7 @@ def log_occupancy(occupied, free, total, pct, lot_full):
 def snapshot_encoder_loop():
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
     while True:
-        time.sleep(SNAPSHOT_RATE)
+        time.sleep(SNAPSHOT_RATE)  # ✅ optimized rate
         with _latest_frame_lock:
             frame = _latest_frame
         if frame is None:
@@ -251,7 +251,9 @@ def detection_loop():
             time.sleep(0.005)
             continue
 
-        frame      = cv2.resize(frame, (FEED_W, FEED_H))
+        frame = cv2.resize(frame, (FEED_W, FEED_H))
+        frame = cv2.rotate(frame, cv2.ROTATE_180)  # ✅ fix upside down camera
+
         frame_idx += 1
         fps_n     += 1
 
@@ -264,7 +266,7 @@ def detection_loop():
         with _latest_frame_lock:
             _latest_frame = frame
 
-        if frame_idx % YOLO_SKIP == 0:
+        if frame_idx % YOLO_SKIP == 0:  # ✅ runs less frequently
             res        = model(frame, imgsz=IMGSZ, verbose=False)[0]
             yolo_boxes = []
             if res.boxes is not None:
@@ -293,7 +295,6 @@ def detection_loop():
         lot_full = total > 0 and free == 0
         ts       = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Log to DB + in-memory history every 30 frames (~1s)
         if frame_idx % 30 == 0:
             history.append({
                 "time":     ts,
@@ -332,7 +333,7 @@ def api_status():
         "status":   "online" if running else "starting",
         "camera":   CAM_SOURCE,
         "fps":      fps,
-        "version":  "4.2",
+        "version":  "4.3",
         "system":   "OccupAI Monitor",
         "location": "105 Peñafrancia Ave, Naga City",
     })
@@ -340,7 +341,6 @@ def api_status():
 
 @app.route('/api/stats')
 def api_stats():
-    """Public — anyone can check available slots"""
     with state_lock:
         return jsonify({
             "occupied":      state["occupied"],
@@ -405,7 +405,6 @@ def api_predictions():
 @app.route('/api/slots', methods=['POST'])
 @jwt_required()
 def api_save_slots():
-    """Admin/Owner only"""
     claims = get_jwt()
     if claims.get("role") not in ["admin", "owner"]:
         return jsonify({"success": False, "message": "Admin or Owner access required."}), 403
@@ -418,7 +417,6 @@ def api_save_slots():
 @app.route('/api/slots/auto', methods=['POST'])
 @jwt_required()
 def api_auto_slots():
-    """Admin/Owner only"""
     claims = get_jwt()
     if claims.get("role") not in ["admin", "owner"]:
         return jsonify({"success": False, "message": "Admin or Owner access required."}), 403
@@ -427,7 +425,6 @@ def api_auto_slots():
     auto = smart_fit_slots(boxes)
     save_slots(auto)
     return jsonify({"success": True, "slots": auto, "count": len(auto)})
-
 
 
 # ╔══════════════════════════════════════════════╗
@@ -440,7 +437,7 @@ if __name__ == '__main__':
     t2.start()
 
     print("\n╔══════════════════════════════════════════╗")
-    print("║     OccupAI Flask API  v4.2 + Auth       ║")
+    print("║     OccupAI Flask API  v4.3 + Auth       ║")
     print("╠══════════════════════════════════════════╣")
     print("║  Dashboard  : http://localhost:5000      ║")
     print("║  Register   : POST /auth/register        ║")
