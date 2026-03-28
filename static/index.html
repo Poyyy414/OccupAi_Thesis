@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OccupAI — Smart Parking Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080B14;
+    --surface:  #0D1120;
+    --surface2: #131929;
+    --border:   #1E2840;
+    --cyan:     #00D2FF;
+    --green:    #00E67A;
+    --red:      #FF3B5C;
+    --yellow:   #FFD02A;
+    --purple:   #B46EFF;
+    --muted:    #4A5580;
+    --text:     #D8E0F5;
+    --white:    #EEF2FF;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .logo-occup {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--cyan);
+    letter-spacing: -1px;
+    text-shadow: 0 0 30px rgba(0,210,255,0.4);
+  }
+
+  .logo-ai {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--white);
+    letter-spacing: -1px;
+  }
+
+  .logo-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-left: 4px;
+    align-self: center;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(0,230,122,0.08);
+    border: 1px solid rgba(0,230,122,0.3);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+
+  .live-dot {
+    width: 7px; height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .timestamp {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── KPI Cards ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color);
+    opacity: 0.8;
+  }
+
+  .kpi-card:hover { transform: translateY(-2px); border-color: var(--accent-color); }
+
+  .kpi-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+
+  .kpi-value {
+    font-size: 42px;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px var(--glow-color);
+    margin-bottom: 4px;
+  }
+
+  .kpi-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* ── Main Grid ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .panel-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Camera Feed ── */
+  .camera-wrap {
+    position: relative;
+    background: #000;
+    aspect-ratio: 4/3;
+  }
+
+  #camera-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .camera-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* Corner brackets */
+  .corner { position: absolute; width: 20px; height: 20px; }
+  .corner.tl { top: 12px; left: 12px; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+  .corner.tr { top: 12px; right: 12px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+  .corner.bl { bottom: 12px; left: 12px; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+  .corner.br { bottom: 12px; right: 12px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+  .camera-info {
+    position: absolute;
+    bottom: 12px; left: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    background: rgba(8,11,20,0.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .fps-badge {
+    position: absolute;
+    top: 12px; right: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+    background: rgba(8,11,20,0.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  /* LOT FULL banner */
+  .lot-full-banner {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,59,92,0.9);
+    color: white;
+    font-size: 22px;
+    font-weight: 900;
+    padding: 12px 30px;
+    border-radius: 8px;
+    letter-spacing: 2px;
+    animation: flashbanner 0.8s infinite alternate;
+  }
+
+  @keyframes flashbanner {
+    from { opacity: 1; }
+    to   { opacity: 0.6; }
+  }
+
+  /* ── Right Panel ── */
+  .right-panel { display: flex; flex-direction: column; gap: 14px; }
+
+  /* Occupancy Gauge */
+  .gauge-wrap {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .gauge-ring {
+    position: relative;
+    width: 160px; height: 160px;
+    margin-bottom: 16px;
+  }
+
+  .gauge-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+  .gauge-track { fill: none; stroke: var(--border); stroke-width: 12; }
+  .gauge-fill  { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dasharray 0.8s ease, stroke 0.5s; }
+
+  .gauge-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gauge-pct {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    transition: color 0.5s;
+  }
+
+  .gauge-pct-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .gauge-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .gauge-stat {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .gauge-stat-val { font-size: 24px; font-weight: 900; line-height: 1; }
+  .gauge-stat-lbl { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-top: 3px; }
+
+  /* Slot Grid */
+  .slot-grid-wrap { padding: 16px; }
+  #slot-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+
+  .slot-cell {
+    aspect-ratio: 1.2;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    font-weight: bold;
+    border: 1px solid;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .slot-cell.free     { background: rgba(0,230,122,0.08); border-color: var(--green); color: var(--green); }
+  .slot-cell.occupied { background: rgba(255,59,92,0.12); border-color: var(--red);   color: var(--red);   }
+  .slot-icon { font-size: 14px; margin-bottom: 2px; }
+
+  /* ── Bottom Grid ── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* Trend Chart */
+  .chart-wrap { padding: 16px 18px 20px; }
+  #trend-chart { width: 100%; height: 120px; }
+
+  /* Peak Hours */
+  .peak-wrap { padding: 16px 18px; }
+  .peak-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .peak-hour-lbl {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    width: 44px;
+    flex-shrink: 0;
+  }
+
+  .peak-bar-bg {
+    flex: 1;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .peak-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.8s ease;
+  }
+
+  .peak-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── LOT FULL Flash ── */
+  body.lot-full { animation: bg-flash 0.8s infinite alternate; }
+  @keyframes bg-flash {
+    from { background: #080B14; }
+    to   { background: #120008; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <span class="logo-occup">Occup</span><span class="logo-ai">AI</span>
+      <span class="logo-sub">SMART PARKING</span>
+    </div>
+    <div class="header-right">
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        LIVE
+      </div>
+      <div class="timestamp" id="timestamp">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--accent-color: var(--red); --glow-color: rgba(255,59,92,0.3)">
+      <div class="kpi-label">OCCUPIED</div>
+      <div class="kpi-value" id="kpi-occupied">0</div>
+      <div class="kpi-sub">slots in use</div>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--green); --glow-color: rgba(0,230,122,0.3)">
+      <div class="kpi-label">AVAILABLE</div>
+      <div class="kpi-value" id="kpi-free">0</div>
+      <div class="kpi-sub">slots free</div>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--cyan); --glow-color: rgba(0,210,255,0.3)">
+      <div class="kpi-label">TOTAL SLOTS</div>
+      <div class="kpi-value" id="kpi-total">0</div>
+      <div class="kpi-sub">capacity</div>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--yellow); --glow-color: rgba(255,208,42,0.3)">
+      <div class="kpi-label">PEAK HOUR</div>
+      <div class="kpi-value" style="font-size:28px" id="kpi-peak">8:00</div>
+      <div class="kpi-sub">busiest time</div>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main-grid">
+
+    <!-- Camera Feed -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">LIVE CAMERA FEED — 105 PEÑAFRANCIA AVE</span>
+        <span class="panel-badge" id="feed-status"
+          style="background:rgba(0,210,255,0.1);border:1px solid var(--cyan);color:var(--cyan)">
+          STREAMING
+        </span>
+      </div>
+      <div class="camera-wrap">
+        <img id="camera-feed" src="" alt="Camera Feed">
+        <div class="camera-overlay">
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+          <div class="fps-badge" id="fps-badge">0.0 fps</div>
+          <div class="camera-info" id="camera-info">OccupAI v4.0 | YOLOv8</div>
+          <div class="lot-full-banner" id="lot-full-banner">⚠ LOT FULL</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+
+      <!-- Gauge -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">OCCUPANCY RATE</span>
+        </div>
+        <div class="gauge-wrap">
+          <div class="gauge-ring">
+            <svg class="gauge-svg" viewBox="0 0 160 160">
+              <circle class="gauge-track" cx="80" cy="80" r="64"/>
+              <circle class="gauge-fill" id="gauge-fill" cx="80" cy="80" r="64"
+                stroke="var(--green)"
+                stroke-dasharray="0 402"
+                stroke-dashoffset="0"/>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-pct" id="gauge-pct" style="color:var(--green)">0%</div>
+              <div class="gauge-pct-label">OCCUPIED</div>
+            </div>
+          </div>
+          <div class="gauge-stats">
+            <div class="gauge-stat">
+              <div class="gauge-stat-val" style="color:var(--red)" id="gs-occupied">0</div>
+              <div class="gauge-stat-lbl">OCCUPIED</div>
+            </div>
+            <div class="gauge-stat">
+              <div class="gauge-stat-val" style="color:var(--green)" id="gs-free">0</div>
+              <div class="gauge-stat-lbl">FREE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slot Grid -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">SLOT STATUS</span>
+          <span id="slot-count" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted)">0 slots</span>
+        </div>
+        <div class="slot-grid-wrap">
+          <div id="slot-grid"></div>
+          <div id="no-slots" style="text-align:center;padding:20px;color:var(--muted);font-size:12px;display:none">
+            No slots detected.<br>Press A in OccupAI Monitor to generate slots.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom Grid -->
+  <div class="bottom-grid">
+
+    <!-- Trend Chart -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">OCCUPANCY TREND</span>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted)" id="trend-label">LAST 100 READINGS</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Peak Hours -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">ESTIMATED PEAK HOURS</span>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--yellow)">TEMPORAL MODEL</span>
+      </div>
+      <div class="peak-wrap" id="peak-bars"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//   OccupAI Dashboard JS
+// ══════════════════════════════════════════════
+const API = '';   // same origin — Flask serves this page
+
+// History buffer for trend chart
+let trendHistory = [];
+let peakData     = {};
+let totalSlots   = 0;
+
+// ── Fetch occupancy data ──
+async function fetchOccupancy() {
+  try {
+    const res  = await fetch(`${API}/api/occupancy`);
+    const data = await res.json();
+    updateDashboard(data);
+  } catch(e) {
+    document.getElementById('feed-status').textContent = 'OFFLINE';
+  }
+}
+
+// ── Fetch camera snapshot ──
+async function fetchSnapshot() {
+  try {
+    const res  = await fetch(`${API}/api/snapshot`);
+    const data = await res.json();
+    if (data.image) {
+      document.getElementById('camera-feed').src = `data:image/jpeg;base64,${data.image}`;
+    }
+  } catch(e) {}
+}
+
+// ── Fetch predictions ──
+async function fetchPredictions() {
+  try {
+    const res  = await fetch(`${API}/api/predictions`);
+    const data = await res.json();
+    peakData = data;
+    document.getElementById('kpi-peak').textContent = data.peak_label || '8:00';
+    renderPeakBars(data.hourly_est);
+  } catch(e) {}
+}
+
+// ── Update all dashboard elements ──
+function updateDashboard(data) {
+  const { occupied, free, total, occupancy_pct, slot_states, lot_full, timestamp, fps } = data;
+
+  // KPIs
+  animateValue('kpi-occupied', occupied);
+  animateValue('kpi-free', free);
+  animateValue('kpi-total', total);
+  totalSlots = total;
+
+  // Timestamp & FPS
+  document.getElementById('timestamp').textContent = timestamp || new Date().toLocaleTimeString();
+  document.getElementById('fps-badge').textContent = `${fps} fps`;
+
+  // Gauge
+  const pct       = occupancy_pct || 0;
+  const circumf   = 2 * Math.PI * 64;
+  const dashArr   = `${(pct / 100) * circumf} ${circumf}`;
+  const gaugeFill = document.getElementById('gauge-fill');
+  const gaugePct  = document.getElementById('gauge-pct');
+  const color     = pct > 75 ? 'var(--red)' : pct > 40 ? 'var(--yellow)' : 'var(--green)';
+  gaugeFill.style.stroke         = color;
+  gaugeFill.style.strokeDasharray = dashArr;
+  gaugePct.textContent           = `${Math.round(pct)}%`;
+  gaugePct.style.color           = color;
+  document.getElementById('gs-occupied').textContent = occupied;
+  document.getElementById('gs-free').textContent     = free;
+
+  // LOT FULL
+  const banner = document.getElementById('lot-full-banner');
+  if (lot_full) {
+    banner.style.display = 'block';
+    document.body.classList.add('lot-full');
+  } else {
+    banner.style.display = 'none';
+    document.body.classList.remove('lot-full');
+  }
+
+  // Slot grid
+  renderSlotGrid(slot_states);
+
+  // Trend history
+  trendHistory.push({ pct, total });
+  if (trendHistory.length > 100) trendHistory.shift();
+  renderTrendChart();
+}
+
+// ── Slot Grid ──
+function renderSlotGrid(states) {
+  const grid    = document.getElementById('slot-grid');
+  const noSlots = document.getElementById('no-slots');
+  const count   = document.getElementById('slot-count');
+
+  if (!states || states.length === 0) {
+    grid.innerHTML = '';
+    noSlots.style.display = 'block';
+    count.textContent = '0 slots';
+    return;
+  }
+
+  noSlots.style.display = 'none';
+  count.textContent     = `${states.length} slots`;
+
+  // Only re-render if count changed
+  if (grid.children.length !== states.length) {
+    grid.innerHTML = '';
+    states.forEach((occ, i) => {
+      const cell = document.createElement('div');
+      cell.className   = `slot-cell ${occ ? 'occupied' : 'free'}`;
+      cell.id          = `slot-${i}`;
+      cell.innerHTML   = `<span class="slot-icon">${occ ? '🚗' : '✓'}</span>P${i+1}`;
+      grid.appendChild(cell);
+    });
+  } else {
+    states.forEach((occ, i) => {
+      const cell = document.getElementById(`slot-${i}`);
+      if (cell) {
+        cell.className = `slot-cell ${occ ? 'occupied' : 'free'}`;
+        cell.innerHTML = `<span class="slot-icon">${occ ? '🚗' : '✓'}</span>P${i+1}`;
+      }
+    });
+  }
+}
+
+// ── Trend Chart ──
+function renderTrendChart() {
+  const canvas = document.getElementById('trend-chart');
+  const ctx    = canvas.getContext('2d');
+  const W      = canvas.offsetWidth;
+  const H      = canvas.offsetHeight;
+  canvas.width  = W;
+  canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (trendHistory.length < 2) return;
+
+  const n    = trendHistory.length;
+  const pts  = trendHistory.map((d, i) => ({
+    x: (i / (n-1)) * W,
+    y: H - (d.pct / 100) * (H - 10) - 5,
+    pct: d.pct
+  }));
+
+  // Fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0,210,255,0.25)');
+  grad.addColorStop(1, 'rgba(0,210,255,0)');
+
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = 'var(--cyan)';
+  ctx.lineWidth   = 2;
+  ctx.stroke();
+
+  // Current dot
+  const last = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = 'var(--cyan)';
+  ctx.fill();
+}
+
+// ── Peak Bars ──
+function renderPeakBars(hourly) {
+  if (!hourly) return;
+  const wrap   = document.getElementById('peak-bars');
+  const max    = Math.max(...Object.values(hourly));
+  const hours  = [7,8,9,12,13,17,18];
+  const labels = {'7':'7AM','8':'8AM','9':'9AM','12':'12PM','13':'1PM','17':'5PM','18':'6PM'};
+
+  wrap.innerHTML = hours.map(h => {
+    const val = hourly[h] || 0;
+    const pct = max > 0 ? (val / max) * 100 : 0;
+    const col = h === 8 ? 'var(--red)' : h === 12 || h === 17 ? 'var(--yellow)' : 'var(--cyan)';
+    return `
+      <div class="peak-bar-row">
+        <div class="peak-hour-lbl">${labels[h]||h}</div>
+        <div class="peak-bar-bg">
+          <div class="peak-bar-fill" style="width:${pct}%;background:${col}"></div>
+        </div>
+        <div class="peak-val">${val}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Animate number ──
+function animateValue(id, target) {
+  const el  = document.getElementById(id);
+  const cur = parseInt(el.textContent) || 0;
+  if (cur === target) return;
+  el.textContent = target;
+}
+
+// ── Start polling ──
+fetchPredictions();
+fetchOccupancy();
+fetchSnapshot();
+
+setInterval(fetchOccupancy, 1000);   // occupancy every 1s
+setInterval(fetchSnapshot,  500);    // camera every 0.5s
+setInterval(fetchPredictions, 60000); // predictions every 60s
+
+// Resize handler for chart
+window.addEventListener('resize', renderTrendChart);
+</script>
+</body>
+</html>
