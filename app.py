@@ -22,7 +22,7 @@ API Endpoints:
   POST /api/slots/auto  → auto-detect slots (admin/owner)
 """
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request 
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt
 import cv2
@@ -39,8 +39,8 @@ from datetime import datetime, timedelta
 from auth import auth_bp
 from database import get_db
 
-app = Flask(__name__, static_folder='static')
-CORS(app)
+app = Flask(__name__)
+CORS(app, origins=["http://localhost:3000"])
 
 # ╔══════════════════════════════════════════════╗
 # ║          JWT CONFIGURATION                  ║
@@ -428,10 +428,6 @@ def api_auto_slots():
     save_slots(auto)
     return jsonify({"success": True, "slots": auto, "count": len(auto)})
 
-
-@app.route('/')
-def index():
-    return send_from_directory('static', 'index.html')
 
 
 # ╔══════════════════════════════════════════════╗
