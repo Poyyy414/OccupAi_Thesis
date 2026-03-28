@@ -1,5 +1,10 @@
 flask
 flask-cors
+flask-jwt-extended
+psycopg2-binary
+bcrypt
+python-dotenv
+opencv-python-headless
 ultralytics
-opencv-python
 numpy
+gunicorn
