@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}OccupAI — Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <!-- LOT FULL BANNER -->
+  <div class="lot-full {% if lot_full %}show{% endif %}" id="lot-full-banner">
+    <div class="lot-full-dot"></div>
+    <div class="lot-full-text">Parking Lot Full — Please come back later</div>
+    <div style="margin-left:auto;font-size:11px;color:var(--muted)" id="lot-full-ts">{{ timestamp }}</div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stats-grid fade-up">
+    <div class="card stat-free" style="box-shadow:0 0 40px #00e5a00a inset;">
+      <div class="card-title">Available Slots</div>
+      <div class="stat-num" id="s-free">{{ free }}</div>
+      <div class="stat-label">spots open right now</div>
+    </div>
+    <div class="card stat-occ" style="box-shadow:0 0 40px #f59e0b0a inset;">
+      <div class="card-title">Occupied</div>
+      <div class="stat-num" id="s-occ">{{ occupied }}</div>
+      <div class="stat-label">vehicles detected</div>
+    </div>
+    <div class="card stat-total" style="box-shadow:0 0 40px #3b82f60a inset;">
+      <div class="card-title">Total Capacity</div>
+      <div class="stat-num" id="s-total">{{ total }}</div>
+      <div class="stat-label">parking spaces</div>
+    </div>
+  </div>
+
+  <!-- RING + CAMERA -->
+  <div class="grid-12 fade-up" style="animation-delay:.08s">
+    <div class="card">
+      <div class="card-title">Occupancy</div>
+      <div class="ring-wrap">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle class="ring-track" cx="65" cy="65" r="54"/>
+          <circle class="ring-fill" id="ring-fill" cx="65" cy="65" r="54"
+            stroke-dasharray="339.3" stroke-dashoffset="339.3"
+            transform="rotate(-90 65 65)" stroke="var(--accent)"/>
+          <text x="65" y="61" text-anchor="middle" fill="var(--text)"
+            font-family="Syne,sans-serif" font-weight="800" font-size="22">
+            <tspan id="ring-pct">{{ occupancy_pct|int }}</tspan><tspan font-size="13">%</tspan>
+          </text>
+          <text x="65" y="77" text-anchor="middle" fill="var(--muted)" font-size="9"
+            font-family="DM Sans,sans-serif">FULL</text>
+        </svg>
+        <div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
+              <span id="leg-free">{{ free }} free</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--warn)"></div>
+              <span id="leg-occ">{{ occupied }} occupied</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2)"></div>
+              <span id="leg-total">{{ total }} total</span>
+            </div>
+            <div style="margin-top:8px;font-family:var(--font-mono);font-size:10px;color:var(--muted)" id="s-ts">{{ timestamp }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Live Camera Feed</div>
+      <div class="cam-frame">
+        <img id="cam-img" src="" style="display:none" alt="Camera feed"/>
+        <div class="cam-placeholder" id="cam-placeholder">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+          <span>Connecting to camera…</span>
+        </div>
+        <div class="cam-overlay">
+          <div class="cam-badge">
+            <div class="cam-dot"></div>
+            <span style="font-family:var(--font-mono);font-size:10px;">LIVE</span>
+          </div>
+          <span class="cam-ts" id="cam-ts"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREDICTIONS -->
+  <div class="card fade-up" style="animation-delay:.14s">
+    <div class="card-title">Hourly Demand Forecast</div>
+    <div class="hour-bars" id="hour-bars"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;" id="pred-badges"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CIRC = 339.3;
+
+function setRing(pct){
+  const el = document.getElementById('ring-fill');
+  el.style.strokeDashoffset = CIRC - (pct/100)*CIRC;
+  el.style.stroke = pct>=90?'var(--danger)':pct>=65?'var(--warn)':'var(--accent)';
+  document.getElementById('ring-pct').textContent = Math.round(pct);
+}
+
+function renderHourBars(hourly, peakHour){
+  const c = document.getElementById('hour-bars');
+  const vals = Object.values(hourly);
+  const max = Math.max(...vals,1);
+  c.innerHTML = Object.entries(hourly).map(([h,v])=>`
+    <div class="hour-bar-wrap">
+      <div class="hour-bar${parseInt(h)===peakHour?' peak':''}" style="height:${Math.round((v/max)*70)+8}px"></div>
+      <div class="hour-lbl">${h}</div>
+    </div>`).join('');
+}
+
+function renderPredBadges(busy,quiet,peakLabel){
+  const c = document.getElementById('pred-badges');
+  c.innerHTML = `<span style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #f59e0b40;color:var(--warn)">Peak: ${peakLabel}</span>`
+    + busy.map(d=>`<span style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #ef444430;color:var(--warn)">${d}</span>`).join('')
+    + quiet.map(d=>`<span style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #00e5a030;color:var(--accent)">${d}</span>`).join('');
+}
+
+async function pollStats(){
+  try{
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    document.getElementById('s-free').textContent  = d.free;
+    document.getElementById('s-occ').textContent   = d.occupied;
+    document.getElementById('s-total').textContent = d.total;
+    document.getElementById('s-ts').textContent    = d.timestamp;
+    document.getElementById('leg-free').textContent  = `${d.free} free`;
+    document.getElementById('leg-occ').textContent   = `${d.occupied} occupied`;
+    document.getElementById('leg-total').textContent = `${d.total} total`;
+    setRing(d.occupancy_pct);
+    const banner = document.getElementById('lot-full-banner');
+    if(d.lot_full){ banner.classList.add('show'); document.getElementById('lot-full-ts').textContent=d.timestamp; }
+    else banner.classList.remove('show');
+  } catch(e){}
+}
+
+async function pollSnap(){
+  try{
+    const r = await fetch('/api/snapshot');
+    const d = await r.json();
+    if(d.image){
+      const img = document.getElementById('cam-img');
+      const ph  = document.getElementById('cam-placeholder');
+      img.src = 'data:image/jpeg;base64,'+d.image;
+      img.style.display='block'; ph.style.display='none';
+      document.getElementById('cam-ts').textContent = d.timestamp;
+    }
+  } catch(e){}
+}
+
+async function pollPred(){
+  try{
+    const r = await fetch('/api/predictions');
+    const d = await r.json();
+    renderHourBars(d.hourly_est, d.peak_hour);
+    renderPredBadges(d.busy_days, d.quiet_days, d.peak_label);
+  } catch(e){}
+}
+
+setRing({{ occupancy_pct }});
+pollStats(); pollSnap(); pollPred();
+setInterval(pollStats, 3000);
+setInterval(pollSnap,  2000);
+setInterval(pollPred,  30000);
+</script>
+{% endblock %}

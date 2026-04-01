@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}OccupAI — Sign In{% endblock %}
+
+{% block head %}
+<style>
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:radial-gradient(ellipse 70% 50% at 50% 0%,#00e5a018 0%,transparent 70%),var(--bg);}
+.login-box{width:420px;background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:48px 40px;position:relative;overflow:hidden;animation:fadeUp .4s ease;}
+.login-box::before{content:'';position:absolute;top:-1px;left:15%;right:15%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);}
+.login-logo{font-family:var(--font-head);font-size:30px;font-weight:800;letter-spacing:-1px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;}
+.login-sub{font-size:12px;color:var(--muted);margin-bottom:36px;}
+.form-group{margin-bottom:18px;}
+.form-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.08em;
+  text-transform:uppercase;margin-bottom:8px;display:block;}
+.form-input{width:100%;padding:13px 16px;border-radius:var(--r);
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text);font-family:var(--font-body);font-size:14px;outline:none;transition:.2s;}
+.form-input:focus{border-color:var(--accent);}
+.form-input::placeholder{color:var(--muted);}
+.login-btn{width:100%;padding:14px;border-radius:var(--r);border:none;
+  background:var(--accent);color:#000;font-family:var(--font-head);
+  font-size:15px;font-weight:700;cursor:pointer;transition:.15s;margin-top:4px;}
+.login-btn:hover{opacity:.85;transform:translateY(-1px);}
+.login-footer{margin-top:22px;text-align:center;font-size:12px;color:var(--muted);}
+.login-footer a{color:var(--accent);text-decoration:underline;}
+.demo-hint{margin-top:18px;font-size:11px;color:var(--muted);text-align:center;
+  font-family:var(--font-mono);line-height:1.6;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-box">
+  <div class="login-logo">OccupAI</div>
+  <div class="login-sub">Smart Parking Monitor · 105 Peñafrancia Ave, Naga City</div>
+
+  <form method="POST" action="/do-login">
+    <div class="form-group">
+      <label class="form-label">Email Address</label>
+      <input class="form-input" type="email" name="email" placeholder="you@email.com" required autocomplete="email"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" name="password" placeholder="••••••••" required autocomplete="current-password"/>
+    </div>
+    <button type="submit" class="login-btn">Sign In</button>
+  </form>
+
+  <div class="login-footer">
+    Don't have an account? <a href="/register">Register here</a>
+  </div>
+</div>
+{% endblock %}

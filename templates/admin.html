@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}OccupAI — Admin{% endblock %}
+
+{% block head %}
+<style>
+.admin-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;
+  font-family:var(--font-mono);font-weight:600;background:#3b82f615;
+  color:var(--accent2);border:1px solid #3b82f630;margin-bottom:16px;}
+</style>
+{% endblock %}
+1
+{% block content %}
+<div class="page-body">
+  <div class="admin-badge">ADMIN PANEL</div>
+
+  <!-- LOT FULL -->
+  <div class="lot-full {% if lot_full %}show{% endif %}" id="lot-full-banner">
+    <div class="lot-full-dot"></div>
+    <div class="lot-full-text">Lot Full — All spaces occupied</div>
+    <div style="margin-left:auto;font-size:11px;color:var(--muted)" id="lot-full-ts">{{ timestamp }}</div>
+  </div>
+
+  <!-- ROW 1: STATS + SYSTEM -->
+  <div class="stats-grid fade-up">
+    <div class="card stat-free" style="box-shadow:0 0 40px #00e5a00a inset;">
+      <div class="card-title">Available</div>
+      <div class="stat-num" id="a-free">{{ free }}</div>
+      <div class="stat-label">slots free</div>
+    </div>
+    <div class="card stat-occ" style="box-shadow:0 0 40px #f59e0b0a inset;">
+      <div class="card-title">Occupied</div>
+      <div class="stat-num" id="a-occ">{{ occupied }}</div>
+      <div class="stat-label">vehicles detected</div>
+    </div>
+    <div class="card">
+      <div class="card-title">System Health</div>
+      <div class="sys-grid">
+        <div class="sys-item">
+          <div class="sys-val sys-online" id="a-status">● ONLINE</div>
+          <div class="sys-lbl">Status</div>
+        </div>
+        <div class="sys-item">
+          <div class="sys-val sys-fps" id="a-fps">{{ fps }} fps</div>
+          <div class="sys-lbl">FPS</div>
+        </div>
+        <div class="sys-item">
+          <div class="sys-val" id="a-total" style="color:var(--accent2)">{{ total }}</div>
+          <div class="sys-lbl">Total Slots</div>
+        </div>
+        <div class="sys-item">
+          <div class="sys-val" id="a-pct" style="color:var(--warn)">{{ occupancy_pct }}%</div>
+          <div class="sys-lbl">Occupancy</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: LIVE FEED + RING/SLOTS -->
+  <div class="grid-21 fade-up" style="animation-delay:.08s">
+    <div class="card">
+      <div class="card-title">Live YOLO Detection Feed</div>
+      <div class="cam-frame" style="aspect-ratio:4/3;position:relative;">
+        <img id="a-cam" src="" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="Camera"/>
+        <canvas id="a-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+        <div class="cam-placeholder" id="a-cam-ph">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+          <span>Connecting to camera…</span>
+        </div>
+        <div class="cam-overlay">
+          <div class="cam-badge">
+            <div class="cam-dot"></div>
+            <span style="font-family:var(--font-mono);font-size:10px;">YOLO ACTIVE</span>
+          </div>
+          <span class="cam-ts" id="a-cam-ts"></span>
+        </div>
+      </div>
+
+      <!-- YOLO stats -->
+      <div class="yolo-info" style="margin-top:12px">
+        <div class="yolo-row">
+          <span class="yolo-tag">Detected Vehicles</span>
+          <span class="yolo-val yolo-accent" id="a-yolo-count">{{ yolo_count }}</span>
+        </div>
+        <div class="yolo-row">
+          <span class="yolo-tag">Active Slots</span>
+          <span class="yolo-val" id="a-slot-count">{{ slot_count }}</span>
+        </div>
+        <div class="yolo-row">
+          <span class="yolo-tag">Detection Mode</span>
+          <span class="yolo-val" style="color:var(--accent2)">Auto-Fit (AI)</span>
+        </div>
+        <div class="yolo-row">
+          <span class="yolo-tag">Last Updated</span>
+          <span class="yolo-val" id="a-yolo-ts">{{ timestamp }}</span>
+        </div>
+      </div>
+
+      <button class="btn btn-outline btn-full" style="margin-top:14px" onclick="triggerAutoSlot(this)">
+        Auto Detect Slots
+      </button>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;gap:20px;">
+      <!-- Occupancy ring -->
+      <div>
+        <div class="card-title">Occupancy Ring</div>
+        <div class="ring-wrap">
+          <svg width="110" height="110" viewBox="0 0 130 130">
+            <circle class="ring-track" cx="65" cy="65" r="54"/>
+            <circle class="ring-fill" id="a-ring" cx="65" cy="65" r="54"
+              stroke-dasharray="339.3" stroke-dashoffset="339.3"
+              transform="rotate(-90 65 65)" stroke="var(--accent)"/>
+            <text x="65" y="61" text-anchor="middle" fill="var(--text)"
+              font-family="Syne,sans-serif" font-weight="800" font-size="22">
+              <tspan id="a-ring-pct">{{ occupancy_pct|int }}</tspan><tspan font-size="13">%</tspan>
+            </text>
+            <text x="65" y="77" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="DM Sans,sans-serif">FULL</text>
+          </svg>
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px" id="a-ring-label">
+              {{ occupied }} of {{ total }} spots occupied
+            </div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)" id="a-ts">{{ timestamp }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Predictions -->
+      <div>
+        <div class="card-title">Hourly Forecast</div>
+        <div class="hour-bars" id="a-hour-bars" style="height:60px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: HISTORY CHART -->
+  <div class="card fade-up" style="animation-delay:.14s">
+    <div class="card-title">Occupancy History (last 100 readings)</div>
+    <canvas id="hist-canvas"></canvas>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CIRC=339.3;
+
+function setRing(id,pct){
+  const el=document.getElementById(id);
+  el.style.strokeDashoffset=CIRC-(pct/100)*CIRC;
+  el.style.stroke=pct>=90?'var(--danger)':pct>=65?'var(--warn)':'var(--accent)';
+}
+
+function drawYOLO(snap,occ){
+  const img=document.getElementById('a-cam');
+  const canvas=document.getElementById('a-canvas');
+  if(!img.naturalWidth) return;
+  const cw=img.offsetWidth,ch=img.offsetHeight;
+  canvas.width=cw; canvas.height=ch;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,cw,ch);
+  const sx=cw/320,sy=ch/240;
+  if(occ && occ.slots && occ.slot_states){
+    occ.slots.forEach((s,i)=>{
+      const occupied=occ.slot_states[i];
+      ctx.strokeStyle=occupied?'#f59e0bcc':'#00e5a0cc';
+      ctx.fillStyle=occupied?'#f59e0b12':'#00e5a012';
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.rect(s[0]*sx,s[1]*sy,(s[2]-s[0])*sx,(s[3]-s[1])*sy);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle=occupied?'#f59e0b':'#00e5a0';
+      ctx.font='8px DM Mono'; ctx.fillText(i+1,s[0]*sx+3,s[1]*sy+10);
+    });
+  }
+  if(occ && occ.yolo_boxes){
+    occ.yolo_boxes.forEach(b=>{
+      ctx.strokeStyle='#3b82f6cc'; ctx.lineWidth=2;
+      ctx.setLineDash([4,2]);
+      ctx.strokeRect(b[0]*sx,b[1]*sy,(b[2]-b[0])*sx,(b[3]-b[1])*sy);
+      ctx.setLineDash([]);
+      ctx.fillStyle='#3b82f6'; ctx.font='9px DM Mono';
+      ctx.fillText('vehicle',b[0]*sx+2,b[1]*sy-3);
+    });
+  }
+}
+
+let lastOcc=null;
+
+async function pollAdmin(){
+  try{
+    // Stats
+    const sr=await fetch('/api/stats');
+    const s=await sr.json();
+    document.getElementById('a-free').textContent=s.free;
+    document.getElementById('a-occ').textContent=s.occupied;
+    document.getElementById('a-total').textContent=s.total;
+    document.getElementById('a-pct').textContent=s.occupancy_pct+'%';
+    document.getElementById('a-ts').textContent=s.timestamp;
+    document.getElementById('a-fps').textContent=s.fps+' fps';
+    document.getElementById('a-ring-pct').textContent=Math.round(s.occupancy_pct);
+    document.getElementById('a-ring-label').textContent=`${s.occupied} of ${s.total} spots occupied`;
+    setRing('a-ring',s.occupancy_pct);
+    const banner=document.getElementById('lot-full-banner');
+    if(s.lot_full){banner.classList.add('show');document.getElementById('lot-full-ts').textContent=s.timestamp;}
+    else banner.classList.remove('show');
+  } catch(e){}
+
+  try{
+    // Snapshot
+    const sr=await fetch('/api/snapshot');
+    const d=await sr.json();
+    if(d.image){
+      const img=document.getElementById('a-cam');
+      const ph=document.getElementById('a-cam-ph');
+      img.src='data:image/jpeg;base64,'+d.image;
+      img.style.display='block'; ph.style.display='none';
+      document.getElementById('a-cam-ts').textContent=d.timestamp;
+    }
+  } catch(e){}
+
+  try{
+    // Occupancy (for YOLO boxes)
+    const or=await fetch('/api/stats');
+    lastOcc=await or.json();
+    // Approximate yolo count from state - use history
+    drawYOLO(null,null);
+  } catch(e){}
+}
+
+async function pollHistory(){
+  try{
+    const r=await fetch('/api/history');
+    const hist=await r.json();
+    renderHist(hist);
+  } catch(e){}
+}
+
+async function pollPred(){
+  try{
+    const r=await fetch('/api/predictions');
+    const d=await r.json();
+    const c=document.getElementById('a-hour-bars');
+    const vals=Object.values(d.hourly_est);
+    const max=Math.max(...vals,1);
+    c.innerHTML=Object.entries(d.hourly_est).map(([h,v])=>`
+      <div class="hour-bar-wrap">
+        <div class="hour-bar${parseInt(h)===d.peak_hour?' peak':''}" style="height:${Math.round((v/max)*52)+6}px"></div>
+        <div class="hour-lbl">${h}</div>
+      </div>`).join('');
+  } catch(e){}
+}
+
+function renderHist(hist){
+  const canvas=document.getElementById('hist-canvas');
+  const W=canvas.parentElement.offsetWidth||600,H=110;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  if(!hist||hist.length<2) return;
+  const pts=hist.slice(-50);
+  const vals=pts.map(p=>p.pct);
+  const xs=i=>Math.round(i/(pts.length-1)*(W-20))+10;
+  const ys=v=>Math.round((1-v/100)*(H-20))+10;
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#00e5a035'); grad.addColorStop(1,'#00e5a000');
+  ctx.beginPath(); ctx.moveTo(xs(0),ys(vals[0]));
+  pts.forEach((_,i)=>{if(i>0)ctx.lineTo(xs(i),ys(vals[i]));});
+  ctx.lineTo(xs(pts.length-1),H); ctx.lineTo(xs(0),H); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.beginPath(); ctx.strokeStyle='#00e5a0'; ctx.lineWidth=2;
+  pts.forEach((_,i)=>{i===0?ctx.moveTo(xs(i),ys(vals[i])):ctx.lineTo(xs(i),ys(vals[i]));});
+  ctx.stroke();
+  pts.forEach((_,i)=>{ctx.beginPath();ctx.arc(xs(i),ys(vals[i]),2.5,0,Math.PI*2);ctx.fillStyle='#00e5a0';ctx.fill();});
+}
+
+async function triggerAutoSlot(btn){
+  btn.textContent='Detecting…'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/slots/auto',{method:'POST'});
+    const d=await r.json();
+    btn.textContent=d.success?`${d.count} slots detected`:'Detection failed';
+  } catch(e){ btn.textContent='Error'; }
+  setTimeout(()=>{btn.textContent='Auto Detect Slots';btn.disabled=false;},3000);
+}
+
+setRing('a-ring',{{ occupancy_pct }});
+pollAdmin(); pollHistory(); pollPred();
+setInterval(pollAdmin,2000);
+setInterval(pollHistory,5000);
+setInterval(pollPred,30000);
+</script>
+{% endblock %}

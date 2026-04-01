@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}OccupAI — Register{% endblock %}
+
+{% block head %}
+<style>
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:radial-gradient(ellipse 70% 50% at 50% 0%,#3b82f618 0%,transparent 70%),var(--bg);}
+.reg-box{width:460px;background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:48px 40px;position:relative;overflow:hidden;animation:fadeUp .4s ease;}
+.reg-box::before{content:'';position:absolute;top:-1px;left:15%;right:15%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent2),transparent);}
+.reg-logo{font-family:var(--font-head);font-size:28px;font-weight:800;letter-spacing:-1px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;}
+.reg-sub{font-size:12px;color:var(--muted);margin-bottom:32px;}
+.form-group{margin-bottom:16px;}
+.form-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.08em;
+  text-transform:uppercase;margin-bottom:7px;display:block;}
+.form-input{width:100%;padding:12px 16px;border-radius:var(--r);
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text);font-family:var(--font-body);font-size:14px;outline:none;transition:.2s;}
+.form-input:focus{border-color:var(--accent2);}
+.form-input::placeholder{color:var(--muted);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.reg-btn{width:100%;padding:13px;border-radius:var(--r);border:none;
+  background:var(--accent2);color:#fff;font-family:var(--font-head);
+  font-size:15px;font-weight:700;cursor:pointer;transition:.15s;margin-top:4px;}
+.reg-btn:hover{opacity:.85;transform:translateY(-1px);}
+.reg-footer{margin-top:20px;text-align:center;font-size:12px;color:var(--muted);}
+.reg-footer a{color:var(--accent);text-decoration:underline;}
+.role-note{font-size:11px;color:var(--muted);text-align:center;margin-top:14px;
+  font-family:var(--font-mono);padding:8px 12px;background:var(--surface);
+  border-radius:8px;border:1px solid var(--border);}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reg-box">
+  <div class="reg-logo">OccupAI</div>
+  <div class="reg-sub">Create your driver account</div>
+
+  <form method="POST" action="/do-register">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">First Name</label>
+        <input class="form-input" type="text" name="first_name" placeholder="Juan" required/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Last Name</label>
+        <input class="form-input" type="text" name="last_name" placeholder="dela Cruz" required/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email Address</label>
+      <input class="form-input" type="email" name="email" placeholder="you@email.com" required/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone Number (optional)</label>
+      <input class="form-input" type="tel" name="phone" placeholder="09xxxxxxxxx"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" name="password" placeholder="At least 6 characters" required/>
+    </div>
+    <button type="submit" class="reg-btn">Create Account</button>
+  </form>
+
+  <div class="role-note">All registered accounts are Driver accounts by default.</div>
+
+  <div class="reg-footer">
+    Already have an account? <a href="/login">Sign in here</a>
+  </div>
+</div>
+{% endblock %}
