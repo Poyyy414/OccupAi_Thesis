@@ -5,7 +5,7 @@ Endpoints:
   POST /auth/register  — create driver account
   POST /auth/login     — login, returns JWT
   GET  /auth/me        — current user + role profile
-  PUT  /auth/profile   — update name/phone/password
+  PUT  /auth/profile   — update name/password
   POST /auth/logout    — logout
 
 Note: Uses RealDictCursor — rows accessed as dicts (row['email'])
@@ -31,7 +31,7 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 def register():
     """
     POST /auth/register
-    Body: { first_name, last_name, email, password, phone? }
+    Body: { first_name, last_name, email, password }
     Role is always 'driver' — cannot be changed via API.
     """
     data = request.get_json()
@@ -48,7 +48,6 @@ def register():
     last_name  = data["last_name"].strip()
     email      = data["email"].strip().lower()
     password   = data["password"]
-    phone      = data.get("phone", "").strip()
     role       = "driver"  # always — never from client
 
     if "@" not in email or "." not in email:
@@ -79,10 +78,10 @@ def register():
 
         # Insert user
         cur.execute("""
-            INSERT INTO users (first_name, last_name, email, password_hash, role, phone)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (first_name, last_name, email, password_hash, role)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING user_id, first_name, last_name, full_name, email, role, created_at
-        """, (first_name, last_name, email, password_hash, role, phone))
+        """, (first_name, last_name, email, password_hash, role))
 
         new_user    = cur.fetchone()
         new_user_id = new_user["user_id"]
@@ -148,7 +147,7 @@ def login():
 
         cur.execute("""
             SELECT user_id, first_name, last_name, full_name,
-                   email, password_hash, role, phone, is_active
+                   email, password_hash, role, is_active
             FROM users WHERE email = %s
         """, (email,))
         user = cur.fetchone()
@@ -202,7 +201,6 @@ def login():
                 "full_name":  user["full_name"],
                 "email":      user["email"],
                 "role":       user["role"],
-                "phone":      user["phone"],
             }
         }), 200
 
@@ -232,7 +230,7 @@ def get_me():
 
         cur.execute("""
             SELECT user_id, first_name, last_name, full_name,
-                   email, role, phone, is_active, created_at, last_login
+                   email, role, is_active, created_at, last_login
             FROM users WHERE user_id = %s
         """, (user_id,))
         user = cur.fetchone()
@@ -289,14 +287,13 @@ def get_me():
 def update_profile():
     """
     PUT /auth/profile
-    Body: { first_name, last_name, phone, password? }
+    Body: { first_name, last_name, password? }
     Role cannot be changed here.
     """
     user_id    = get_jwt_identity()
     data       = request.get_json()
     first_name = data.get("first_name", "").strip()
     last_name  = data.get("last_name",  "").strip()
-    phone      = data.get("phone",      "").strip()
     password   = data.get("password",   "")
 
     if not first_name or not last_name:
@@ -320,19 +317,16 @@ def update_profile():
             ).decode("utf-8")
             cur.execute("""
                 UPDATE users
-                SET first_name=%s, last_name=%s, phone=%s,
+                SET first_name=%s, last_name=%s,
                     password_hash=%s, updated_at=%s
                 WHERE user_id=%s
-            """, (first_name, last_name, phone,
-                  password_hash, datetime.utcnow(), user_id))
+            """, (first_name, last_name, password_hash, datetime.utcnow(), user_id))
         else:
             cur.execute("""
                 UPDATE users
-                SET first_name=%s, last_name=%s,
-                    phone=%s, updated_at=%s
+                SET first_name=%s, last_name=%s, updated_at=%s
                 WHERE user_id=%s
-            """, (first_name, last_name, phone,
-                  datetime.utcnow(), user_id))
+            """, (first_name, last_name, datetime.utcnow(), user_id))
 
         conn.commit()
         cur.close(); conn.close()

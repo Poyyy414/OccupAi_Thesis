@@ -291,13 +291,13 @@ def do_login():
         flash(f"Login error: {e}","error")
         return redirect(url_for("login_page"))
 
+
 @app.route("/do-register", methods=["POST"])
 def do_register():
     first_name=request.form.get("first_name","").strip()
     last_name =request.form.get("last_name","").strip()
     email     =request.form.get("email","").strip().lower()
     password  =request.form.get("password","")
-    phone     =request.form.get("phone","").strip()
     if not all([first_name,last_name,email,password]):
         flash("All fields are required.","error")
         return redirect(url_for("register_page"))
@@ -312,9 +312,9 @@ def do_register():
             flash("Email already registered. Please login.","error")
             cur.close(); conn.close()
             return redirect(url_for("register_page"))
-        cur.execute("""INSERT INTO users(first_name,last_name,email,password_hash,role,phone)
-            VALUES(%s,%s,%s,%s,'driver',%s) RETURNING user_id""",
-            (first_name,last_name,email,pw_hash,phone))
+        cur.execute("""INSERT INTO users(first_name,last_name,email,password_hash,role)
+            VALUES(%s,%s,%s,%s,'driver') RETURNING user_id""",
+            (first_name,last_name,email,pw_hash))
         new_id=cur.fetchone()["user_id"]
         cur.execute("INSERT INTO drivers(user_id) VALUES(%s)",(new_id,))
         conn.commit(); cur.close(); conn.close()
@@ -323,6 +323,7 @@ def do_register():
     except Exception as e:
         flash(f"Registration error: {e}","error")
         return redirect(url_for("register_page"))
+
 
 @app.route("/logout")
 def do_logout():

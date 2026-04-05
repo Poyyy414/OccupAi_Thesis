@@ -49,7 +49,6 @@ def init_db():
             password_hash VARCHAR(255) NOT NULL,
             role          VARCHAR(20)  NOT NULL DEFAULT 'driver'
                 CHECK (role IN ('driver', 'admin', 'owner')),
-            phone         VARCHAR(20)  DEFAULT '',
             is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
             created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
