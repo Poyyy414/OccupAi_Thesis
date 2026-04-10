@@ -50,7 +50,7 @@ elif CAM_SOURCE == "droidcam":
     CAM_URL     = "http://localhost:4747/video"
     CAM_BACKEND = cv2.CAP_FFMPEG
 else:  # "webcam" (default)
-    CAM_URL     = 0
+    CAM_URL     = int(os.getenv("WEBCAM_INDEX", "0")) 
     CAM_BACKEND = cv2.CAP_ANY
 
 # ── Performance ──
@@ -426,3 +426,4 @@ if __name__ == "__main__":
     print("╚══════════════════════════════════════╝\n")
     app.run(host="0.0.0.0", port=5000, debug=False,
             threaded=True, use_reloader=False)
+
