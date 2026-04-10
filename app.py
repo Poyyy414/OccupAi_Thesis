@@ -42,14 +42,17 @@ app.register_blueprint(slots_bp)
 
 # ── Camera ──
 CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
+
 if CAM_SOURCE == "wifi":
     CAM_URL     = os.getenv("RTSP_URL", "rtsp://admin:password@192.168.1.100:554/stream")
     CAM_BACKEND = cv2.CAP_FFMPEG
+
 elif CAM_SOURCE == "droidcam":
     CAM_URL     = "http://localhost:4747/video"
     CAM_BACKEND = cv2.CAP_FFMPEG
-else:
-    CAM_URL     = 0
+
+else:  # "webcam" (default)
+    CAM_URL     = 0          # 0 = first system webcam
     CAM_BACKEND = cv2.CAP_ANY
 
 # ── Performance ──
