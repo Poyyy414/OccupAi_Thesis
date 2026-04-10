@@ -46,13 +46,11 @@ CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
 if CAM_SOURCE == "wifi":
     CAM_URL     = os.getenv("RTSP_URL", "rtsp://admin:password@192.168.1.100:554/stream")
     CAM_BACKEND = cv2.CAP_FFMPEG
-
 elif CAM_SOURCE == "droidcam":
     CAM_URL     = "http://localhost:4747/video"
     CAM_BACKEND = cv2.CAP_FFMPEG
-
 else:  # "webcam" (default)
-    CAM_URL     = 0          # 0 = first system webcam
+    CAM_URL     = 0
     CAM_BACKEND = cv2.CAP_ANY
 
 # ── Performance ──
@@ -176,7 +174,8 @@ def detection_loop():
     cap = cv2.VideoCapture(CAM_URL, CAM_BACKEND)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     cap.set(cv2.CAP_PROP_FPS, 15)
-    if not cap.isOpened(): print("ERROR: Cannot open camera."); return
+    if not cap.isOpened():
+        print("ERROR: Cannot open camera."); return
     print(f"Camera OK! ({CAM_SOURCE} {FEED_W}x{FEED_H})")
     saved_slots=load_slots(); frame_idx=0; yolo_boxes=[]
     fps_t=time.time(); fps_n=0; fps_val=0.0
@@ -261,6 +260,79 @@ def admin_page():
         occupancy_pct=s["occupancy_pct"], lot_full=s["lot_full"],
         fps=s["fps"], timestamp=s["timestamp"],
         yolo_count=len(s["yolo_boxes"]), slot_count=len(s["slots"]))
+
+
+# ── Snapshot API (used by dashboard Live Camera Feed) ──
+@app.route("/api/snapshot")
+@login_required
+def api_snapshot():
+    with snap_lock:
+        return jsonify({
+            "image":     snap["frame_b64"],   # ← dashboard expects "image" key
+            "timestamp": snap["timestamp"]
+        })
+
+
+# ── Stats API ──
+@app.route("/api/stats")
+@login_required
+def api_stats():
+    with state_lock: s = dict(state)
+    return jsonify({
+        "occupied":     s["occupied"],
+        "free":         s["free"],
+        "total":        s["total"],
+        "occupancy_pct": s["occupancy_pct"],
+        "lot_full":     s["lot_full"],
+        "timestamp":    s["timestamp"]
+    })
+
+
+# ── Predictions API ──
+@app.route("/api/predictions")
+@login_required
+def api_predictions():
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""
+            SELECT EXTRACT(HOUR FROM created_at) AS hour,
+                   AVG(occupancy_pct) AS avg_pct
+            FROM parking_logs
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY hour ORDER BY hour
+        """)
+        rows = cur.fetchall(); cur.close(); conn.close()
+
+        hourly = {str(int(r["hour"])): round(float(r["avg_pct"]), 1) for r in rows}
+
+        # Fill missing hours with 0
+        for h in range(24):
+            hourly.setdefault(str(h), 0.0)
+
+        peak_hour = max(hourly, key=lambda h: hourly[h])
+        peak_val  = hourly[peak_hour]
+
+        busy_days  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][:3]
+        quiet_days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][5:]
+
+        return jsonify({
+            "hourly_est": hourly,
+            "peak_hour":  int(peak_hour),
+            "peak_label": f"{peak_hour}:00 ({peak_val:.0f}%)",
+            "busy_days":  busy_days,
+            "quiet_days": quiet_days
+        })
+    except Exception as e:
+        print(f"⚠ predictions: {e}")
+        # Fallback if DB fails
+        hourly = {str(h): 0.0 for h in range(24)}
+        return jsonify({
+            "hourly_est": hourly,
+            "peak_hour":  8,
+            "peak_label": "N/A",
+            "busy_days":  [],
+            "quiet_days": []
+        })
 
 
 # ── Form handlers ──
