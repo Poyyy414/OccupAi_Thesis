@@ -11,9 +11,11 @@ SERVER_URL = "https://occupai-thesis.onrender.com/api/push-frame"
 CAM_TOKEN  = "occupai_cam_2027"   # must match CAM_TOKEN env var on Render
 PUSH_FPS   = 2   # push 2 frames per second (adjust as needed)
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH,  256)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
+
+time.sleep(2)  # warm-up time for camera
 
 if not cap.isOpened():
     print("ERROR: Cannot open webcam")
@@ -23,11 +25,13 @@ print("Streaming to Render... Press Ctrl+C to stop")
 
 while True:
     ret, frame = cap.read()
-    if not ret:
+    if not ret or frame is None:
+        print("Warning: failed to grab frame, retrying...")
+        time.sleep(0.5)
         continue
 
-    _, buf   = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
-    b64      = base64.b64encode(buf).decode('utf-8')
+    _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
+    b64    = base64.b64encode(buf).decode('utf-8')
 
     try:
         r = requests.post(SERVER_URL,

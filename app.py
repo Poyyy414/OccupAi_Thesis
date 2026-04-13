@@ -42,8 +42,6 @@ app.register_blueprint(api_bp)
 app.register_blueprint(slots_bp)
 
 # ── Deployment mode ──
-# Set DEPLOY_MODE=cloud in Render environment variables
-# Leave unset (or set to "local") when running on your PC
 DEPLOY_MODE = os.getenv("DEPLOY_MODE", "local")
 IS_CLOUD    = DEPLOY_MODE == "cloud"
 CAM_TOKEN   = os.getenv("CAM_TOKEN", "occupai_cam_2027")
@@ -242,7 +240,6 @@ def cloud_detection_loop():
 
     while True:
         time.sleep(0.1)
-
         with _latest_frame_lock: frame = _latest_frame
         if frame is None: continue
 
@@ -287,7 +284,7 @@ def cloud_detection_loop():
             })
 
 
-# ── Cloud snapshot encoder (encodes pushed frames for /api/snapshot) ──
+# ── Cloud snapshot encoder ──
 def cloud_snapshot_loop():
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
     last_snap_frame = None
@@ -295,7 +292,7 @@ def cloud_snapshot_loop():
         time.sleep(SNAPSHOT_RATE)
         with _latest_frame_lock: frame = _latest_frame
         if frame is None: continue
-        if frame is last_snap_frame: continue  # skip if no new frame
+        if frame is last_snap_frame: continue
         last_snap_frame = frame
         try:
             _, buf = cv2.imencode('.jpg', frame, encode_params)
@@ -312,21 +309,13 @@ def cloud_snapshot_loop():
 # ╚══════════════════════════════════════════════╝
 @app.route("/api/push-frame", methods=["POST"])
 def push_frame():
-    """
-    Called by local_camera.py running on your PC.
-    Receives a base64 JPEG frame and stores it for YOLO + snapshot.
-    """
     global _latest_frame
-
-    # Token auth
     token = request.headers.get("X-Cam-Token", "")
     if token != CAM_TOKEN:
         return jsonify({"error": "unauthorized"}), 401
-
     data = request.get_json(silent=True)
     if not data or "frame" not in data:
         return jsonify({"error": "no frame"}), 400
-
     try:
         img_bytes = base64.b64decode(data["frame"])
         np_arr    = np.frombuffer(img_bytes, dtype=np.uint8)
@@ -529,16 +518,20 @@ def do_logout():
     return redirect(url_for("login_page"))
 
 
-if __name__ == "__main__":
-    if IS_CLOUD:
-        print("🌐 CLOUD MODE — waiting for frames from local_camera.py")
-        threading.Thread(target=cloud_detection_loop,  daemon=True).start()
-        threading.Thread(target=cloud_snapshot_loop,   daemon=True).start()
-    else:
-        print("💻 LOCAL MODE — using webcam directly")
-        threading.Thread(target=detection_loop,        daemon=True).start()
-        threading.Thread(target=snapshot_encoder_loop, daemon=True).start()
+# ╔══════════════════════════════════════════════╗
+# ║   Auto-start threads (works with gunicorn)  ║
+# ╚══════════════════════════════════════════════╝
+if IS_CLOUD:
+    print("🌐 CLOUD MODE — waiting for frames from local_camera.py")
+    threading.Thread(target=cloud_detection_loop, daemon=True).start()
+    threading.Thread(target=cloud_snapshot_loop,  daemon=True).start()
+else:
+    print("💻 LOCAL MODE — using webcam directly")
+    threading.Thread(target=detection_loop,        daemon=True).start()
+    threading.Thread(target=snapshot_encoder_loop, daemon=True).start()
 
+
+if __name__ == "__main__":
     print("\n╔══════════════════════════════════════╗")
     print("║   OccupAI  v4.3  Flask + Jinja2      ║")
     print(f"║   Mode: {'CLOUD (Render)' if IS_CLOUD else 'LOCAL         '}      ║")
