@@ -1,7 +1,8 @@
 """
 app.py — OccupAI Flask API v4.3 + Jinja2 Templates
 =====================================================
-Run: python app.py
+Run locally:  python app.py
+Deployed on:  Render (camera pushed from local_camera.py)
 """
 
 from flask import (Flask, render_template, request, redirect,
@@ -40,17 +41,23 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(slots_bp)
 
-# ── Camera ──
-CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
+# ── Deployment mode ──
+# Set DEPLOY_MODE=cloud in Render environment variables
+# Leave unset (or set to "local") when running on your PC
+DEPLOY_MODE = os.getenv("DEPLOY_MODE", "local")
+IS_CLOUD    = DEPLOY_MODE == "cloud"
+CAM_TOKEN   = os.getenv("CAM_TOKEN", "occupai_cam_2027")
 
+# ── Camera (only used in local mode) ──
+CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
 if CAM_SOURCE == "wifi":
     CAM_URL     = os.getenv("RTSP_URL", "rtsp://admin:password@192.168.1.100:554/stream")
     CAM_BACKEND = cv2.CAP_FFMPEG
 elif CAM_SOURCE == "droidcam":
     CAM_URL     = "http://localhost:4747/video"
     CAM_BACKEND = cv2.CAP_FFMPEG
-else:  # "webcam" (default)
-    CAM_URL     = int(os.getenv("WEBCAM_INDEX", "0")) 
+else:
+    CAM_URL     = int(os.getenv("WEBCAM_INDEX", "0"))
     CAM_BACKEND = cv2.CAP_ANY
 
 # ── Performance ──
@@ -147,7 +154,7 @@ def log_occupancy(occupied, free, total, pct, lot_full):
         print(f"⚠ log_occupancy: {e}")
 
 
-# ── Snapshot thread ──
+# ── Snapshot thread (local mode only) ──
 def snapshot_encoder_loop():
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
     while True:
@@ -164,7 +171,7 @@ def snapshot_encoder_loop():
         except: pass
 
 
-# ── Detection thread ──
+# ── Detection thread (local mode only) ──
 def detection_loop():
     global _latest_frame
     print("Loading YOLO model...")
@@ -221,6 +228,119 @@ def detection_loop():
     cap.release()
 
 
+# ── Cloud YOLO thread (runs on Render — processes pushed frames) ──
+def cloud_detection_loop():
+    global _latest_frame
+    print("Cloud mode: Loading YOLO model...")
+    model = YOLO("yolov8n.pt")
+    model(np.zeros((FEED_H,FEED_W,3),dtype=np.uint8), imgsz=IMGSZ, verbose=False)
+    print("Cloud YOLO ready. Waiting for pushed frames...")
+    with state_lock: state["running"] = True
+    frame_idx = 0; yolo_boxes = []
+    fps_t=time.time(); fps_n=0; fps_val=0.0
+    saved_slots = load_slots()
+
+    while True:
+        time.sleep(0.1)
+
+        with _latest_frame_lock: frame = _latest_frame
+        if frame is None: continue
+
+        frame_idx += 1; fps_n += 1
+        now = time.time()
+        if now - fps_t >= 1.0:
+            fps_val = fps_n / (now - fps_t); fps_n = 0; fps_t = now
+
+        if frame_idx % YOLO_SKIP == 0:
+            res = model(frame, imgsz=IMGSZ, verbose=False)[0]; yolo_boxes=[]
+            if res.boxes is not None:
+                for r in res.boxes:
+                    if int(r.cls[0]) in VEHICLE_CLS and float(r.conf[0]) > CONF_THRESH:
+                        x1,y1,x2,y2 = map(int, r.xyxy[0])
+                        yolo_boxes.append([x1,y1,x2,y2])
+
+        if frame_idx % SLOTS_RELOAD == 0:
+            saved_slots = load_slots()
+
+        active_slots = saved_slots if saved_slots else smart_fit_slots(yolo_boxes)
+        occupied=0; slot_states=[]
+        for (sx1,sy1,sx2,sy2) in active_slots:
+            occ = any(compute_iou((sx1,sy1,sx2,sy2), tuple(vb)) > IOU_THRESH
+                      for vb in yolo_boxes)
+            slot_states.append(occ); occupied += int(occ)
+        total=len(active_slots); free=total-occupied
+        pct=(occupied/total*100) if total else 0
+        lot_full=total>0 and free==0
+        ts=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if frame_idx % 30 == 0:
+            history.append({"time":ts,"occupied":occupied,
+                "total":total,"pct":round(pct,1)})
+            log_occupancy(occupied, free, total, pct, lot_full)
+
+        with state_lock:
+            state.update({
+                "occupied":occupied, "free":free, "total":total,
+                "occupancy_pct":round(pct,1), "slot_states":slot_states,
+                "slots":active_slots, "yolo_boxes":yolo_boxes,
+                "fps":round(fps_val,1), "timestamp":ts, "lot_full":lot_full
+            })
+
+
+# ── Cloud snapshot encoder (encodes pushed frames for /api/snapshot) ──
+def cloud_snapshot_loop():
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
+    last_snap_frame = None
+    while True:
+        time.sleep(SNAPSHOT_RATE)
+        with _latest_frame_lock: frame = _latest_frame
+        if frame is None: continue
+        if frame is last_snap_frame: continue  # skip if no new frame
+        last_snap_frame = frame
+        try:
+            _, buf = cv2.imencode('.jpg', frame, encode_params)
+            b64 = base64.b64encode(buf).decode('utf-8')
+            ts  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with snap_lock:
+                snap["frame_b64"] = b64
+                snap["timestamp"] = ts
+        except: pass
+
+
+# ╔══════════════════════════════════════════════╗
+# ║   PUSH FRAME ENDPOINT (cloud mode)          ║
+# ╚══════════════════════════════════════════════╝
+@app.route("/api/push-frame", methods=["POST"])
+def push_frame():
+    """
+    Called by local_camera.py running on your PC.
+    Receives a base64 JPEG frame and stores it for YOLO + snapshot.
+    """
+    global _latest_frame
+
+    # Token auth
+    token = request.headers.get("X-Cam-Token", "")
+    if token != CAM_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
+
+    data = request.get_json(silent=True)
+    if not data or "frame" not in data:
+        return jsonify({"error": "no frame"}), 400
+
+    try:
+        img_bytes = base64.b64decode(data["frame"])
+        np_arr    = np.frombuffer(img_bytes, dtype=np.uint8)
+        frame     = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"error": "invalid image"}), 400
+        frame = cv2.resize(frame, (FEED_W, FEED_H))
+        with _latest_frame_lock:
+            _latest_frame = frame
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ╔══════════════════════════════════════════════╗
 # ║        PAGE ROUTES (Jinja2)                 ║
 # ╚══════════════════════════════════════════════╝
@@ -262,13 +382,13 @@ def admin_page():
         yolo_count=len(s["yolo_boxes"]), slot_count=len(s["slots"]))
 
 
-# ── Snapshot API (used by dashboard Live Camera Feed) ──
+# ── Snapshot API ──
 @app.route("/api/snapshot")
 @login_required
 def api_snapshot():
     with snap_lock:
         return jsonify({
-            "image":     snap["frame_b64"],   # ← dashboard expects "image" key
+            "image":     snap["frame_b64"],
             "timestamp": snap["timestamp"]
         })
 
@@ -279,12 +399,12 @@ def api_snapshot():
 def api_stats():
     with state_lock: s = dict(state)
     return jsonify({
-        "occupied":     s["occupied"],
-        "free":         s["free"],
-        "total":        s["total"],
+        "occupied":      s["occupied"],
+        "free":          s["free"],
+        "total":         s["total"],
         "occupancy_pct": s["occupancy_pct"],
-        "lot_full":     s["lot_full"],
-        "timestamp":    s["timestamp"]
+        "lot_full":      s["lot_full"],
+        "timestamp":     s["timestamp"]
     })
 
 
@@ -302,19 +422,13 @@ def api_predictions():
             GROUP BY hour ORDER BY hour
         """)
         rows = cur.fetchall(); cur.close(); conn.close()
-
         hourly = {str(int(r["hour"])): round(float(r["avg_pct"]), 1) for r in rows}
-
-        # Fill missing hours with 0
         for h in range(24):
             hourly.setdefault(str(h), 0.0)
-
-        peak_hour = max(hourly, key=lambda h: hourly[h])
-        peak_val  = hourly[peak_hour]
-
+        peak_hour  = max(hourly, key=lambda h: hourly[h])
+        peak_val   = hourly[peak_hour]
         busy_days  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][:3]
         quiet_days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][5:]
-
         return jsonify({
             "hourly_est": hourly,
             "peak_hour":  int(peak_hour),
@@ -324,7 +438,6 @@ def api_predictions():
         })
     except Exception as e:
         print(f"⚠ predictions: {e}")
-        # Fallback if DB fails
         hourly = {str(h): 0.0 for h in range(24)}
         return jsonify({
             "hourly_est": hourly,
@@ -417,13 +530,20 @@ def do_logout():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=detection_loop, daemon=True).start()
-    threading.Thread(target=snapshot_encoder_loop, daemon=True).start()
+    if IS_CLOUD:
+        print("🌐 CLOUD MODE — waiting for frames from local_camera.py")
+        threading.Thread(target=cloud_detection_loop,  daemon=True).start()
+        threading.Thread(target=cloud_snapshot_loop,   daemon=True).start()
+    else:
+        print("💻 LOCAL MODE — using webcam directly")
+        threading.Thread(target=detection_loop,        daemon=True).start()
+        threading.Thread(target=snapshot_encoder_loop, daemon=True).start()
+
     print("\n╔══════════════════════════════════════╗")
     print("║   OccupAI  v4.3  Flask + Jinja2      ║")
+    print(f"║   Mode: {'CLOUD (Render)' if IS_CLOUD else 'LOCAL         '}      ║")
     print("╠══════════════════════════════════════╣")
     print("║  http://localhost:5000               ║")
     print("╚══════════════════════════════════════╝\n")
     app.run(host="0.0.0.0", port=5000, debug=False,
             threaded=True, use_reloader=False)
-
