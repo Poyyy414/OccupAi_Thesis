@@ -1,8 +1,11 @@
 """
-app.py — OccupAI Flask API v4.3 + Jinja2 Templates
-=====================================================
+app.py — OccupAI Flask API v4.4
+================================
 Run locally:  python app.py
 Deployed on:  Render (camera pushed from local_camera.py)
+
+FIX: Removed duplicate /api/snapshot, /api/stats, /api/predictions routes
+     that conflicted with api.py blueprint routes.
 """
 
 from flask import (Flask, render_template, request, redirect,
@@ -16,7 +19,6 @@ import bcrypt
 import threading
 import time
 import base64
-import json
 import os
 from collections import deque
 from datetime import datetime, timedelta
@@ -45,6 +47,8 @@ app.register_blueprint(slots_bp)
 DEPLOY_MODE = os.getenv("DEPLOY_MODE", "local")
 IS_CLOUD    = DEPLOY_MODE == "cloud"
 CAM_TOKEN   = os.getenv("CAM_TOKEN", "occupai_cam_2027")
+
+print(f"DEPLOY_MODE={DEPLOY_MODE!r}  IS_CLOUD={IS_CLOUD}")  # debug on startup
 
 # ── Camera (only used in local mode) ──
 CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
@@ -166,7 +170,8 @@ def snapshot_encoder_loop():
             with snap_lock:
                 snap["frame_b64"] = b64
                 snap["timestamp"] = ts
-        except: pass
+        except Exception as e:
+            print(f"⚠ snapshot_encoder_loop: {e}")
 
 
 # ── Detection thread (local mode only) ──
@@ -301,7 +306,9 @@ def cloud_snapshot_loop():
             with snap_lock:
                 snap["frame_b64"] = b64
                 snap["timestamp"] = ts
-        except: pass
+            print(f"DEBUG snap updated: {len(b64)} bytes")  # remove after confirming
+        except Exception as e:
+            print(f"⚠ cloud_snapshot_loop: {e}")
 
 
 # ╔══════════════════════════════════════════════╗
@@ -369,72 +376,6 @@ def admin_page():
         occupancy_pct=s["occupancy_pct"], lot_full=s["lot_full"],
         fps=s["fps"], timestamp=s["timestamp"],
         yolo_count=len(s["yolo_boxes"]), slot_count=len(s["slots"]))
-
-
-# ── Snapshot API ──
-@app.route("/api/snapshot")
-@login_required
-def api_snapshot():
-    with snap_lock:
-        return jsonify({
-            "image":     snap["frame_b64"],
-            "timestamp": snap["timestamp"]
-        })
-
-
-# ── Stats API ──
-@app.route("/api/stats")
-@login_required
-def api_stats():
-    with state_lock: s = dict(state)
-    return jsonify({
-        "occupied":      s["occupied"],
-        "free":          s["free"],
-        "total":         s["total"],
-        "occupancy_pct": s["occupancy_pct"],
-        "lot_full":      s["lot_full"],
-        "timestamp":     s["timestamp"]
-    })
-
-
-# ── Predictions API ──
-@app.route("/api/predictions")
-@login_required
-def api_predictions():
-    try:
-        conn = get_db(); cur = conn.cursor()
-        cur.execute("""
-            SELECT EXTRACT(HOUR FROM created_at) AS hour,
-                   AVG(occupancy_pct) AS avg_pct
-            FROM parking_logs
-            WHERE created_at >= NOW() - INTERVAL '7 days'
-            GROUP BY hour ORDER BY hour
-        """)
-        rows = cur.fetchall(); cur.close(); conn.close()
-        hourly = {str(int(r["hour"])): round(float(r["avg_pct"]), 1) for r in rows}
-        for h in range(24):
-            hourly.setdefault(str(h), 0.0)
-        peak_hour  = max(hourly, key=lambda h: hourly[h])
-        peak_val   = hourly[peak_hour]
-        busy_days  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][:3]
-        quiet_days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][5:]
-        return jsonify({
-            "hourly_est": hourly,
-            "peak_hour":  int(peak_hour),
-            "peak_label": f"{peak_hour}:00 ({peak_val:.0f}%)",
-            "busy_days":  busy_days,
-            "quiet_days": quiet_days
-        })
-    except Exception as e:
-        print(f"⚠ predictions: {e}")
-        hourly = {str(h): 0.0 for h in range(24)}
-        return jsonify({
-            "hourly_est": hourly,
-            "peak_hour":  8,
-            "peak_label": "N/A",
-            "busy_days":  [],
-            "quiet_days": []
-        })
 
 
 # ── Form handlers ──
@@ -533,10 +474,10 @@ else:
 
 if __name__ == "__main__":
     print("\n╔══════════════════════════════════════╗")
-    print("║   OccupAI  v4.3  Flask + Jinja2      ║")
+    print("║   OccupAI  v4.4  Flask + Jinja2      ║")
     print(f"║   Mode: {'CLOUD (Render)' if IS_CLOUD else 'LOCAL         '}      ║")
     print("╠══════════════════════════════════════╣")
     print("║  http://localhost:5000               ║")
     print("╚══════════════════════════════════════╝\n")
     app.run(host="0.0.0.0", port=5000, debug=False,
-            threaded=True, use_reloader=False)
+            threaded=True, use_reloader=False)  
