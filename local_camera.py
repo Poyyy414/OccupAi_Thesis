@@ -7,7 +7,7 @@ import base64
 import requests
 import time
 
-SERVER_URL = "https://occupai-thesis-1.onrender.com/api/push-frame"
+SERVER_URL = "https://occupai-thesis.onrender.com/api/push-frame"
 CAM_TOKEN  = "occupai_cam_2027"   # must match CAM_TOKEN env var on Render
 PUSH_FPS   = 2   # push 2 frames per second (adjust as needed)
 
