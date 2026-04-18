@@ -3,9 +3,6 @@ app.py — OccupAI Flask API v4.4
 ================================
 Run locally:  python app.py
 Deployed on:  Render (camera pushed from local_camera.py)
-
-FIX: Removed duplicate /api/snapshot, /api/stats, /api/predictions routes
-     that conflicted with api.py blueprint routes.
 """
 
 from flask import (Flask, render_template, request, redirect,
@@ -48,7 +45,7 @@ DEPLOY_MODE = os.getenv("DEPLOY_MODE", "local")
 IS_CLOUD    = DEPLOY_MODE == "cloud"
 CAM_TOKEN   = os.getenv("CAM_TOKEN", "occupai_cam_2027")
 
-print(f"DEPLOY_MODE={DEPLOY_MODE!r}  IS_CLOUD={IS_CLOUD}")  # debug on startup
+print(f"DEPLOY_MODE={DEPLOY_MODE!r}  IS_CLOUD={IS_CLOUD}")
 
 # ── Camera (only used in local mode) ──
 CAM_SOURCE = os.getenv("CAM_SOURCE", "webcam")
@@ -63,8 +60,8 @@ else:
     CAM_BACKEND = cv2.CAP_ANY
 
 # ── Performance ──
-FEED_W=256; FEED_H=192; IMGSZ=128; YOLO_SKIP=20
-JPEG_QUALITY=25; SNAPSHOT_RATE=2.0; SLOTS_RELOAD=60
+FEED_W=1280; FEED_H=720; IMGSZ=640; YOLO_SKIP=10
+JPEG_QUALITY=75; SNAPSHOT_RATE=0.1; SLOTS_RELOAD=60
 
 # ── Lot config ──
 VEHICLE_CLS={2,3,5,7}; CONF_THRESH=0.25; IOU_THRESH=0.15
@@ -183,7 +180,7 @@ def detection_loop():
     print("Model ready.")
     cap = cv2.VideoCapture(CAM_URL, CAM_BACKEND)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    cap.set(cv2.CAP_PROP_FPS, 15)
+    cap.set(cv2.CAP_PROP_FPS, 30)
     if not cap.isOpened():
         print("ERROR: Cannot open camera."); return
     print(f"Camera OK! ({CAM_SOURCE} {FEED_W}x{FEED_H})")
@@ -231,7 +228,7 @@ def detection_loop():
     cap.release()
 
 
-# ── Cloud YOLO thread (runs on Render — processes pushed frames) ──
+# ── Cloud YOLO thread ──
 def cloud_detection_loop():
     global _latest_frame
     print("Cloud mode: Loading YOLO model...")
@@ -244,7 +241,7 @@ def cloud_detection_loop():
     saved_slots = load_slots()
 
     while True:
-        time.sleep(0.1)
+        time.sleep(0.05)
         with _latest_frame_lock: frame = _latest_frame
         if frame is None: continue
 
@@ -306,7 +303,6 @@ def cloud_snapshot_loop():
             with snap_lock:
                 snap["frame_b64"] = b64
                 snap["timestamp"] = ts
-            print(f"DEBUG snap updated: {len(b64)} bytes")  # remove after confirming
         except Exception as e:
             print(f"⚠ cloud_snapshot_loop: {e}")
 
@@ -330,8 +326,18 @@ def push_frame():
         if frame is None:
             return jsonify({"error": "invalid image"}), 400
         frame = cv2.resize(frame, (FEED_W, FEED_H))
+
         with _latest_frame_lock:
             _latest_frame = frame
+
+        # Encode snapshot immediately on push for instant dashboard update
+        _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+        b64 = base64.b64encode(buf).decode('utf-8')
+        ts  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with snap_lock:
+            snap["frame_b64"] = b64
+            snap["timestamp"] = ts
+
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -480,4 +486,4 @@ if __name__ == "__main__":
     print("║  http://localhost:5000               ║")
     print("╚══════════════════════════════════════╝\n")
     app.run(host="0.0.0.0", port=5000, debug=False,
-            threaded=True, use_reloader=False)  
+            threaded=True, use_reloader=False)

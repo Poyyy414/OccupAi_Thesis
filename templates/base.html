@@ -68,10 +68,23 @@ a{color:inherit;text-decoration:none;}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #ef444460;}50%{box-shadow:0 0 0 8px transparent;}}
 .lot-full-text{font-family:var(--font-head);font-weight:700;font-size:14px;color:var(--danger);}
 
-/* CAMERA */
-.cam-frame{width:100%;aspect-ratio:4/3;background:#050709;border-radius:12px;
-  overflow:hidden;position:relative;border:1px solid var(--border);}
-.cam-frame img{width:100%;height:100%;object-fit:cover;display:block;}
+/* CAMERA — fixed to 16:9 for 720p feed */
+.cam-frame{
+  width:100%;
+  aspect-ratio:16/9;  /* changed from 4/3 to match 1280x720 */
+  background:#050709;
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+  border:1px solid var(--border);
+}
+.cam-frame img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  transition:opacity 0.1s ease;
+}
 .cam-overlay{position:absolute;bottom:10px;left:10px;right:10px;
   display:flex;align-items:center;justify-content:space-between;}
 .cam-badge{display:flex;align-items:center;gap:6px;background:#000a;
@@ -160,7 +173,6 @@ canvas{display:block;width:100%;height:110px;}
 {% endwith %}
 
 {% block content %}{% endblock %}
-
 {% block scripts %}{% endblock %}
 </body>
 </html>
